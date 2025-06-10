@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <iomanip>
 #include <cstdlib>
+#include <fstream>
+#include <sstream>
 
 #ifdef _WIN32
     #include <windows.h>
@@ -173,6 +175,68 @@ public:
         skills[skill] += points;
         std::cout << name << "'s " << skill << " improved by " << points 
                   << " (now " << skills[skill] << ")\n";
+    }
+
+    // Serialization methods for saving/loading
+    std::string serialize() const {
+        std::stringstream ss;
+        ss << name << "|" << experience << "|" << level << "|" 
+           << static_cast<int>(jobLevel) << "|" << (eligibleForPromotion ? 1 : 0) 
+           << "|" << activitiesLeft << "|" << daysSinceActivity << "|";
+        
+        // Save skills
+        for (const auto& skill : skills) {
+            ss << skill.first << ":" << skill.second << ",";
+        }
+        ss << "\n";
+        return ss.str();
+    }
+
+    static Character deserialize(const std::string& data) {
+        std::stringstream ss(data);
+        std::string token;
+        
+        // Parse basic data
+        std::getline(ss, token, '|');
+        Character character(token); // name
+        
+        std::getline(ss, token, '|');
+        character.experience = std::stoi(token);
+        
+        std::getline(ss, token, '|');
+        character.level = std::stoi(token);
+        
+        std::getline(ss, token, '|');
+        character.jobLevel = static_cast<JobLevel>(std::stoi(token));
+        
+        std::getline(ss, token, '|');
+        character.eligibleForPromotion = (std::stoi(token) == 1);
+        
+        std::getline(ss, token, '|');
+        character.activitiesLeft = std::stoi(token);
+        
+        std::getline(ss, token, '|');
+        character.daysSinceActivity = std::stoi(token);
+        
+        // Parse skills
+        std::getline(ss, token);
+        if (!token.empty() && token.back() == ',') {
+            token.pop_back(); // Remove trailing comma
+        }
+        
+        character.skills.clear();
+        std::stringstream skillStream(token);
+        std::string skillPair;
+        while (std::getline(skillStream, skillPair, ',')) {
+            size_t colonPos = skillPair.find(':');
+            if (colonPos != std::string::npos) {
+                std::string skillName = skillPair.substr(0, colonPos);
+                int skillValue = std::stoi(skillPair.substr(colonPos + 1));
+                character.skills[skillName] = skillValue;
+            }
+        }
+        
+        return character;
     }
 
     void displayStats() const {
@@ -671,6 +735,103 @@ public:
         std::cin.get();
     }
 
+    bool saveGame(const std::string& filename) {
+        std::ofstream file(filename);
+        if (!file.is_open()) {
+            std::cout << "Error: Could not create save file '" << filename << "'!\n";
+            return false;
+        }
+
+        // Save game metadata
+        file << "SDEWG_SAVE_v1.0\n";
+        file << currentDay << "\n";
+        file << characters.size() << "\n";
+
+        // Save each character
+        for (const auto& character : characters) {
+            file << character.serialize();
+        }
+
+        file.close();
+        std::cout << "Game saved to '" << filename << "'!\n";
+        return true;
+    }
+
+    bool loadGame(const std::string& filename) {
+        std::ifstream file(filename);
+        if (!file.is_open()) {
+            std::cout << "Error: Could not open save file '" << filename << "'!\n";
+            return false;
+        }
+
+        std::string line;
+        
+        // Check file format
+        std::getline(file, line);
+        if (line != "SDEWG_SAVE_v1.0") {
+            std::cout << "Error: Invalid save file format!\n";
+            file.close();
+            return false;
+        }
+
+        // Load game metadata
+        std::getline(file, line);
+        currentDay = std::stoi(line);
+
+        std::getline(file, line);
+        int numCharacters = std::stoi(line);
+
+        // Clear existing characters and load from file
+        characters.clear();
+        for (int i = 0; i < numCharacters; ++i) {
+            std::getline(file, line);
+            characters.push_back(Character::deserialize(line));
+        }
+
+        file.close();
+        std::cout << "Game loaded from '" << filename << "'!\n";
+        std::cout << "Day " << currentDay << " - " << characters.size() << " team members loaded.\n";
+        return true;
+    }
+
+    void saveGameMenu() {
+        clearScreen();
+        std::cout << "=== Save Game ===\n";
+        std::cout << "Enter save file name (without extension): ";
+        std::string filename;
+        std::cin >> filename;
+        filename += ".sav";
+
+        if (saveGame(filename)) {
+            std::cout << "Save successful!\n";
+        } else {
+            std::cout << "Save failed!\n";
+        }
+
+        std::cout << "Press Enter to continue...";
+        std::cin.ignore();
+        std::cin.get();
+    }
+
+    void loadGameMenu() {
+        clearScreen();
+        std::cout << "=== Load Game ===\n";
+        std::cout << "Enter save file name (without extension): ";
+        std::string filename;
+        std::cin >> filename;
+        filename += ".sav";
+
+        if (loadGame(filename)) {
+            std::cout << "Load successful!\n";
+        } else {
+            std::cout << "Load failed!\n";
+        }
+
+        std::cout << "Press Enter to continue...";
+        std::cin.ignore();
+        std::cin.get();
+    }
+
     void runGame() {
         clearScreen();
         std::cout << "=== Welcome to SDEWG RPG ===\n";
@@ -690,7 +851,9 @@ public:
             std::cout << "5. View Team Stats\n";
             std::cout << "6. View Available Tasks\n";
             std::cout << "7. Next Day\n";
-            std::cout << "8. Exit\n";
+            std::cout << "8. Save Game\n";
+            std::cout << "9. Load Game\n";
+            std::cout << "10. Exit\n";
             std::cout << "Choice: ";
 
             int choice;
@@ -731,6 +894,12 @@ public:
                     nextDay();
                     break;
                 case 8:
+                    saveGameMenu();
+                    break;
+                case 9:
+                    loadGameMenu();
+                    break;
+                case 10:
                     clearScreen();
                     std::cout << "Thanks for playing SDEWG RPG!\n";
                     return;
