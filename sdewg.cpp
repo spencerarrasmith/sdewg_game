@@ -5,6 +5,18 @@
 #include <random>
 #include <algorithm>
 #include <iomanip>
+#include <cstdlib>
+
+#ifdef _WIN32
+    #include <windows.h>
+    void clearScreen() {
+        system("cls");
+    }
+#else
+    void clearScreen() {
+        system("clear");
+    }
+#endif
 
 class Character {
 private:
@@ -12,9 +24,14 @@ private:
     std::map<std::string, int> skills;
     int experience;
     int level;
+    int activitiesLeft;
+    int daysSinceActivity;
+    static const int MAX_ACTIVITIES_PER_DAY = 3;
+    static const int SKILL_DECAY_THRESHOLD = 7; // days
 
 public:
-    Character(const std::string& n) : name(n), experience(0), level(1) {
+    Character(const std::string& n) : name(n), experience(0), level(1), 
+                                     activitiesLeft(MAX_ACTIVITIES_PER_DAY), daysSinceActivity(0) {
         // Initialize core meeting skills
         skills["Leadership"] = 1;
         skills["Communication"] = 1;
@@ -26,10 +43,45 @@ public:
     const std::string& getName() const { return name; }
     int getLevel() const { return level; }
     int getExperience() const { return experience; }
+    int getActivitiesLeft() const { return activitiesLeft; }
+    int getDaysSinceActivity() const { return daysSinceActivity; }
     
     int getSkill(const std::string& skill) const {
         auto it = skills.find(skill);
         return (it != skills.end()) ? it->second : 0;
+    }
+
+    bool canDoActivity() const {
+        return activitiesLeft > 0;
+    }
+
+    void useActivity() {
+        if (activitiesLeft > 0) {
+            activitiesLeft--;
+            daysSinceActivity = 0;
+        }
+    }
+
+    void newDay() {
+        activitiesLeft = MAX_ACTIVITIES_PER_DAY;
+        daysSinceActivity++;
+        
+        // Apply skill decay if inactive too long
+        if (daysSinceActivity >= SKILL_DECAY_THRESHOLD) {
+            applySkillDecay();
+        }
+    }
+
+    void applySkillDecay() {
+        std::cout << name << " has been inactive for " << daysSinceActivity 
+                  << " days. Skills are decaying!\n";
+        for (auto& skill : skills) {
+            if (skill.second > 1) {
+                skill.second--;
+                std::cout << name << "'s " << skill.first << " decreased to " 
+                          << skill.second << "\n";
+            }
+        }
     }
 
     void gainExperience(int exp) {
@@ -50,6 +102,8 @@ public:
     void displayStats() const {
         std::cout << "\n=== " << name << " ===\n";
         std::cout << "Level: " << level << " | Experience: " << experience << "\n";
+        std::cout << "Activities Left Today: " << activitiesLeft << "/" << MAX_ACTIVITIES_PER_DAY << "\n";
+        std::cout << "Days Since Last Activity: " << daysSinceActivity << "\n";
         std::cout << "Skills:\n";
         for (const auto& skill : skills) {
             std::cout << "  " << std::setw(15) << skill.first << ": " << skill.second << "\n";
@@ -78,9 +132,10 @@ private:
     std::vector<MeetingTask> tasks;
     std::mt19937 rng;
     std::uniform_int_distribution<int> dice;
+    int currentDay;
 
 public:
-    MeetingGame() : rng(std::random_device{}()), dice(1, 20) {
+    MeetingGame() : rng(std::random_device{}()), dice(1, 20), currentDay(1) {
         initializeTasks();
     }
 
@@ -109,10 +164,11 @@ public:
     }
 
     void displayCharacters() const {
-        std::cout << "\n=== Team Members ===\n";
+        std::cout << "\n=== Team Members (Day " << currentDay << ") ===\n";
         for (size_t i = 0; i < characters.size(); ++i) {
             std::cout << i + 1 << ". " << characters[i].getName() 
-                      << " (Level " << characters[i].getLevel() << ")\n";
+                      << " (Level " << characters[i].getLevel() 
+                      << ", Activities: " << characters[i].getActivitiesLeft() << "/3)\n";
         }
     }
 
@@ -139,6 +195,11 @@ public:
         Character& character = characters[charIndex];
         const MeetingTask& task = tasks[taskIndex];
 
+        if (!character.canDoActivity()) {
+            std::cout << character.getName() << " has no activities left today!\n";
+            return false;
+        }
+
         std::cout << "\n" << character.getName() << " attempts: " << task.name << "\n";
         
         // Roll dice + skill level vs difficulty
@@ -149,6 +210,8 @@ public:
         std::cout << "Roll: " << roll << " + " << task.requiredSkill 
                   << " (" << skillLevel << ") = " << totalScore 
                   << " vs Difficulty " << task.difficulty << "\n";
+
+        character.useActivity();
 
         if (totalScore >= task.difficulty) {
             std::cout << "SUCCESS! ";
@@ -163,9 +226,28 @@ public:
         }
     }
 
+    void nextDay() {
+        currentDay++;
+        clearScreen();
+        std::cout << "=== Day " << currentDay << " begins! ===\n";
+        
+        for (auto& character : characters) {
+            character.newDay();
+        }
+        
+        std::cout << "All team members have refreshed their daily activities.\n";
+        std::cout << "Press Enter to continue...";
+        std::cin.ignore();
+        std::cin.get();
+    }
+
     void playRound() {
+        clearScreen();
         if (characters.empty()) {
             std::cout << "No team members available! Add some first.\n";
+            std::cout << "Press Enter to continue...";
+            std::cin.ignore();
+            std::cin.get();
             return;
         }
 
@@ -180,30 +262,49 @@ public:
         std::cin >> taskChoice;
 
         attemptTask(charChoice - 1, taskChoice - 1);
+        
+        std::cout << "\nPress Enter to continue...";
+        std::cin.ignore();
+        std::cin.get();
     }
 
     void showStats() {
+        clearScreen();
         if (characters.empty()) {
             std::cout << "No team members to display!\n";
+            std::cout << "Press Enter to continue...";
+            std::cin.ignore();
+            std::cin.get();
             return;
         }
         
         for (const auto& character : characters) {
             character.displayStats();
         }
+        
+        std::cout << "\nPress Enter to continue...";
+        std::cin.ignore();
+        std::cin.get();
     }
 
     void runGame() {
-        std::cout << "=== Welcome to Meeting Masters RPG ===\n";
-        std::cout << "Build your team and level up through meeting challenges!\n\n";
+        clearScreen();
+        std::cout << "=== Welcome to SDEWG RPG ===\n";
+        std::cout << "Build your team and level up through meeting challenges!\n";
+        std::cout << "Each character can do 3 activities per day.\n";
+        std::cout << "Inactive characters lose skills after 7 days!\n\n";
+        std::cout << "Press Enter to start...";
+        std::cin.get();
 
         while (true) {
-            std::cout << "\n=== Main Menu ===\n";
+            clearScreen();
+            std::cout << "\n=== SDEWG RPG - Day " << currentDay << " ===\n";
             std::cout << "1. Add Team Member\n";
-            std::cout << "2. Play Round\n";
+            std::cout << "2. Do Activity\n";
             std::cout << "3. View Team Stats\n";
             std::cout << "4. View Available Tasks\n";
-            std::cout << "5. Exit\n";
+            std::cout << "5. Next Day\n";
+            std::cout << "6. Exit\n";
             std::cout << "Choice: ";
 
             int choice;
@@ -211,10 +312,14 @@ public:
 
             switch (choice) {
                 case 1: {
+                    clearScreen();
                     std::cout << "Enter team member name: ";
                     std::string name;
                     std::cin >> name;
                     addCharacter(name);
+                    std::cout << "Press Enter to continue...";
+                    std::cin.ignore();
+                    std::cin.get();
                     break;
                 }
                 case 2:
@@ -224,10 +329,18 @@ public:
                     showStats();
                     break;
                 case 4:
+                    clearScreen();
                     displayTasks();
+                    std::cout << "Press Enter to continue...";
+                    std::cin.ignore();
+                    std::cin.get();
                     break;
                 case 5:
-                    std::cout << "Thanks for playing Meeting Masters RPG!\n";
+                    nextDay();
+                    break;
+                case 6:
+                    clearScreen();
+                    std::cout << "Thanks for playing SDEWG RPG!\n";
                     return;
                 default:
                     std::cout << "Invalid choice!\n";
