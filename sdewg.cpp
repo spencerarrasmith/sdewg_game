@@ -185,45 +185,111 @@ public:
         }
     }
 
-    bool attemptTask(int charIndex, int taskIndex) {
-        if (charIndex < 0 || charIndex >= characters.size() || 
-            taskIndex < 0 || taskIndex >= tasks.size()) {
-            std::cout << "Invalid selection!\n";
-            return false;
-        }
-
-        Character& character = characters[charIndex];
-        const MeetingTask& task = tasks[taskIndex];
-
-        if (!character.canDoActivity()) {
-            std::cout << character.getName() << " has no activities left today!\n";
-            return false;
-        }
-
-        std::cout << "\n" << character.getName() << " attempts: " << task.name << "\n";
+    std::vector<int> parseCharacterSelection(const std::string& input) {
+        std::vector<int> indices;
+        std::string current = "";
         
-        // Roll dice + skill level vs difficulty
-        int roll = dice(rng);
-        int skillLevel = character.getSkill(task.requiredSkill);
-        int totalScore = roll + skillLevel;
+        for (char c : input + ",") {
+            if (c == ',' || c == ' ') {
+                if (!current.empty()) {
+                    try {
+                        int index = std::stoi(current) - 1;
+                        if (index >= 0 && index < characters.size()) {
+                            indices.push_back(index);
+                        }
+                    } catch (...) {}
+                    current = "";
+                }
+            } else if (isdigit(c)) {
+                current += c;
+            }
+        }
+        
+        // Remove duplicates
+        std::sort(indices.begin(), indices.end());
+        indices.erase(std::unique(indices.begin(), indices.end()), indices.end());
+        
+        return indices;
+    }
 
-        std::cout << "Roll: " << roll << " + " << task.requiredSkill 
-                  << " (" << skillLevel << ") = " << totalScore 
-                  << " vs Difficulty " << task.difficulty << "\n";
-
-        character.useActivity();
-
-        if (totalScore >= task.difficulty) {
-            std::cout << "SUCCESS! ";
-            character.gainExperience(task.expReward);
-            character.improveSkill(task.requiredSkill, task.skillReward);
-            return true;
-        } else {
-            std::cout << "FAILED! " << character.getName() 
-                      << " gains " << (task.expReward / 3) << " XP for trying.\n";
-            character.gainExperience(task.expReward / 3);
+    bool attemptTaskMultiple(const std::vector<int>& charIndices, int taskIndex) {
+        if (taskIndex < 0 || taskIndex >= tasks.size()) {
+            std::cout << "Invalid task selection!\n";
             return false;
         }
+
+        if (charIndices.empty()) {
+            std::cout << "No valid characters selected!\n";
+            return false;
+        }
+
+        const MeetingTask& task = tasks[taskIndex];
+        std::vector<Character*> availableChars;
+        
+        // Check which characters can participate
+        for (int index : charIndices) {
+            if (characters[index].canDoActivity()) {
+                availableChars.push_back(&characters[index]);
+            } else {
+                std::cout << characters[index].getName() << " has no activities left today!\n";
+            }
+        }
+
+        if (availableChars.empty()) {
+            std::cout << "No characters available to do this activity!\n";
+            return false;
+        }
+
+        std::cout << "\n=== Team Activity: " << task.name << " ===\n";
+        std::cout << "Participants: ";
+        for (size_t i = 0; i < availableChars.size(); ++i) {
+            std::cout << availableChars[i]->getName();
+            if (i < availableChars.size() - 1) std::cout << ", ";
+        }
+        std::cout << "\n\n";
+
+        // Calculate team bonus (10% per additional member, max 50%)
+        int teamBonus = std::min(4, static_cast<int>(availableChars.size() - 1)) * 2;
+        if (teamBonus > 0) {
+            std::cout << "Team Collaboration Bonus: +" << teamBonus << "\n";
+        }
+
+        bool anySuccess = false;
+        
+        // Each character attempts the task
+        for (Character* character : availableChars) {
+            int roll = dice(rng);
+            int skillLevel = character->getSkill(task.requiredSkill);
+            int totalScore = roll + skillLevel + teamBonus;
+
+            std::cout << character->getName() << ": Roll " << roll 
+                      << " + " << task.requiredSkill << "(" << skillLevel << ")";
+            if (teamBonus > 0) std::cout << " + Team(" << teamBonus << ")";
+            std::cout << " = " << totalScore << " vs " << task.difficulty << "\n";
+
+            character->useActivity();
+
+            if (totalScore >= task.difficulty) {
+                std::cout << "  SUCCESS! ";
+                character->gainExperience(task.expReward);
+                character->improveSkill(task.requiredSkill, task.skillReward);
+                anySuccess = true;
+            } else {
+                std::cout << "  FAILED! " << character->getName() 
+                          << " gains " << (task.expReward / 3) << " XP for trying.\n";
+                character->gainExperience(task.expReward / 3);
+            }
+        }
+
+        // Additional team success bonus
+        if (anySuccess && availableChars.size() > 1) {
+            std::cout << "\nTeam activity bonus XP granted to all participants!\n";
+            for (Character* character : availableChars) {
+                character->gainExperience(5 * (availableChars.size() - 1));
+            }
+        }
+
+        return anySuccess;
     }
 
     void nextDay() {
@@ -252,16 +318,26 @@ public:
         }
 
         displayCharacters();
-        std::cout << "\nSelect team member (1-" << characters.size() << "): ";
-        int charChoice;
-        std::cin >> charChoice;
+        std::cout << "\nSelect team member(s) (e.g., '1' or '1,3,5' or '1 2 4'): ";
+        std::string charInput;
+        std::cin.ignore();
+        std::getline(std::cin, charInput);
+        
+        std::vector<int> selectedChars = parseCharacterSelection(charInput);
+        
+        if (selectedChars.empty()) {
+            std::cout << "No valid characters selected!\n";
+            std::cout << "Press Enter to continue...";
+            std::cin.get();
+            return;
+        }
 
         displayTasks();
         std::cout << "Select task (1-" << tasks.size() << "): ";
         int taskChoice;
         std::cin >> taskChoice;
 
-        attemptTask(charChoice - 1, taskChoice - 1);
+        attemptTaskMultiple(selectedChars, taskChoice - 1);
         
         std::cout << "\nPress Enter to continue...";
         std::cin.ignore();
