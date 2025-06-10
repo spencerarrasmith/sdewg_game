@@ -241,6 +241,44 @@ public:
         initializePromotionTasks();
     }
 
+    void initializePromotionTasks() {
+        // Intern -> Engineer 1
+        promotionTasks.emplace_back("Complete First Project", 
+            "Successfully deliver your first major project contribution",
+            JobLevel::INTERN, 
+            std::map<std::string, int>{{"Communication", 3}, {"Teamwork", 3}}, 15);
+        
+        // Engineer 1 -> Engineer 2
+        promotionTasks.emplace_back("Lead Technical Initiative", 
+            "Take ownership of a technical solution and guide its implementation",
+            JobLevel::ENGINEER_1, 
+            std::map<std::string, int>{{"Problem_Solving", 5}, {"Leadership", 4}}, 18);
+        
+        // Engineer 2 -> Senior Engineer
+        promotionTasks.emplace_back("Mentor Junior Engineers", 
+            "Successfully guide and develop junior team members",
+            JobLevel::ENGINEER_2, 
+            std::map<std::string, int>{{"Leadership", 6}, {"Communication", 6}, {"Teamwork", 5}}, 22);
+        
+        // Senior Engineer -> Principal Engineer
+        promotionTasks.emplace_back("Drive Cross-Team Architecture", 
+            "Design and implement solutions spanning multiple teams",
+            JobLevel::SENIOR_ENGINEER, 
+            std::map<std::string, int>{{"Leadership", 8}, {"Problem_Solving", 8}, {"Presentation", 6}}, 28);
+        
+        // Principal Engineer -> Distinguished Engineer
+        promotionTasks.emplace_back("Establish Technical Strategy", 
+            "Define technical direction and standards for the organization",
+            JobLevel::PRINCIPAL_ENGINEER, 
+            std::map<std::string, int>{{"Leadership", 10}, {"Problem_Solving", 10}, {"Presentation", 8}}, 35);
+        
+        // Distinguished Engineer -> Fellow
+        promotionTasks.emplace_back("Shape Industry Standards", 
+            "Influence technical standards and practices across the industry",
+            JobLevel::DISTINGUISHED_ENGINEER, 
+            std::map<std::string, int>{{"Leadership", 12}, {"Problem_Solving", 12}, {"Presentation", 10}, {"Communication", 10}}, 45);
+    }
+
     void initializeTasks() {
         tasks.emplace_back("Lead Discussion", "Guide the team through a complex topic", 
                           "Leadership", 10, 25, 2);
@@ -406,6 +444,56 @@ public:
             return false;
         }
     }
+
+    void attemptPromotion() {
+        clearScreen();
+        if (characters.empty()) {
+            std::cout << "No team members available!\n";
+            std::cout << "Press Enter to continue...";
+            std::cin.ignore();
+            std::cin.get();
+            return;
+        }
+
+        // Show only characters eligible for promotion
+        std::vector<int> eligibleChars;
+        std::cout << "\n=== Characters Eligible for Promotion ===\n";
+        for (size_t i = 0; i < characters.size(); ++i) {
+            if (characters[i].isEligibleForPromotion()) {
+                eligibleChars.push_back(i);
+                std::cout << eligibleChars.size() << ". " << characters[i].getName() 
+                          << " (" << characters[i].getJobLevelString() << ")\n";
+            }
+        }
+
+        if (eligibleChars.empty()) {
+            std::cout << "No characters are eligible for promotion!\n";
+            std::cout << "Characters need sufficient experience and must meet skill requirements.\n";
+            std::cout << "Press Enter to continue...";
+            std::cin.ignore();
+            std::cin.get();
+            return;
+        }
+
+        std::cout << "\nSelect character for promotion (1-" << eligibleChars.size() 
+                  << ", or 0 to cancel): ";
+        int choice;
+        std::cin >> choice;
+
+        if (choice == 0) {
+            std::cout << "Promotion cancelled.\n";
+        } else if (choice >= 1 && choice <= eligibleChars.size()) {
+            attemptPromotionTask(eligibleChars[choice - 1]);
+        } else {
+            std::cout << "Invalid selection!\n";
+        }
+        
+        std::cout << "\nPress Enter to continue...";
+        std::cin.ignore();
+        std::cin.get();
+    }
+
+    std::vector<int> parseCharacterSelection(const std::string& input) {
         std::vector<int> indices;
         std::string current = "";
         
@@ -643,38 +731,6 @@ public:
                     nextDay();
                     break;
                 case 8:
-                    clearScreen();
-                    std::cout << "Thanks for playing SDEWG RPG!\n";
-                    return;
-                default:
-                    std::cout << "Invalid choice!\n";
-            } >> name;
-                    addCharacter(name);
-                    std::cout << "Press Enter to continue...";
-                    std::cin.ignore();
-                    std::cin.get();
-                    break;
-                }
-                case 2:
-                    removeCharacter();
-                    break;
-                case 3:
-                    playRound();
-                    break;
-                case 4:
-                    showStats();
-                    break;
-                case 5:
-                    clearScreen();
-                    displayTasks();
-                    std::cout << "Press Enter to continue...";
-                    std::cin.ignore();
-                    std::cin.get();
-                    break;
-                case 6:
-                    nextDay();
-                    break;
-                case 7:
                     clearScreen();
                     std::cout << "Thanks for playing SDEWG RPG!\n";
                     return;
