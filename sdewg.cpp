@@ -18,19 +18,57 @@
     }
 #endif
 
+enum class JobLevel {
+    INTERN = 0,
+    ENGINEER_1 = 1,
+    ENGINEER_2 = 2,
+    SENIOR_ENGINEER = 3,
+    PRINCIPAL_ENGINEER = 4,
+    DISTINGUISHED_ENGINEER = 5,
+    FELLOW = 6
+};
+
 class Character {
 private:
     std::string name;
     std::map<std::string, int> skills;
     int experience;
     int level;
+    JobLevel jobLevel;
+    bool eligibleForPromotion;
     int activitiesLeft;
     int daysSinceActivity;
     static const int MAX_ACTIVITIES_PER_DAY = 3;
     static const int SKILL_DECAY_THRESHOLD = 7; // days
 
+    std::string getJobLevelName(JobLevel jl) const {
+        switch (jl) {
+            case JobLevel::INTERN: return "Intern";
+            case JobLevel::ENGINEER_1: return "Engineer 1";
+            case JobLevel::ENGINEER_2: return "Engineer 2";
+            case JobLevel::SENIOR_ENGINEER: return "Senior Engineer";
+            case JobLevel::PRINCIPAL_ENGINEER: return "Principal Engineer";
+            case JobLevel::DISTINGUISHED_ENGINEER: return "Distinguished Engineer";
+            case JobLevel::FELLOW: return "Fellow";
+            default: return "Unknown";
+        }
+    }
+
+    int getPromotionRequirement(JobLevel jl) const {
+        switch (jl) {
+            case JobLevel::INTERN: return 200;           // To Engineer 1
+            case JobLevel::ENGINEER_1: return 500;       // To Engineer 2
+            case JobLevel::ENGINEER_2: return 1000;      // To Senior Engineer
+            case JobLevel::SENIOR_ENGINEER: return 2000; // To Principal Engineer
+            case JobLevel::PRINCIPAL_ENGINEER: return 4000; // To Distinguished Engineer
+            case JobLevel::DISTINGUISHED_ENGINEER: return 8000; // To Fellow
+            default: return 999999; // Fellow is max level
+        }
+    }
+
 public:
     Character(const std::string& n) : name(n), experience(0), level(1), 
+                                     jobLevel(JobLevel::INTERN), eligibleForPromotion(false),
                                      activitiesLeft(MAX_ACTIVITIES_PER_DAY), daysSinceActivity(0) {
         // Initialize core meeting skills
         skills["Leadership"] = 1;
@@ -45,6 +83,9 @@ public:
     int getExperience() const { return experience; }
     int getActivitiesLeft() const { return activitiesLeft; }
     int getDaysSinceActivity() const { return daysSinceActivity; }
+    JobLevel getJobLevel() const { return jobLevel; }
+    std::string getJobLevelString() const { return getJobLevelName(jobLevel); }
+    bool isEligibleForPromotion() const { return eligibleForPromotion; }
     
     int getSkill(const std::string& skill) const {
         auto it = skills.find(skill);
@@ -60,6 +101,40 @@ public:
             activitiesLeft--;
             daysSinceActivity = 0;
         }
+    }
+
+    void checkPromotionEligibility() {
+        if (jobLevel == JobLevel::FELLOW) return; // Max level reached
+        
+        int requiredExp = getPromotionRequirement(jobLevel);
+        if (experience >= requiredExp && !eligibleForPromotion) {
+            eligibleForPromotion = true;
+            std::cout << "\n*** " << name << " is eligible for promotion to " 
+                      << getJobLevelName(static_cast<JobLevel>(static_cast<int>(jobLevel) + 1)) 
+                      << "! ***\n";
+            std::cout << "Complete a promotion task to advance!\n";
+        }
+    }
+
+    bool attemptPromotion() {
+        if (!eligibleForPromotion || jobLevel == JobLevel::FELLOW) {
+            return false;
+        }
+        
+        jobLevel = static_cast<JobLevel>(static_cast<int>(jobLevel) + 1);
+        eligibleForPromotion = false;
+        
+        std::cout << "\n🎉 PROMOTION! " << name << " is now a " 
+                  << getJobLevelName(jobLevel) << "! 🎉\n";
+        
+        // Promotion bonus
+        gainExperience(100);
+        for (auto& skill : skills) {
+            skill.second += 1;
+        }
+        std::cout << "Promotion bonus: +100 XP and +1 to all skills!\n";
+        
+        return true;
     }
 
     void newDay() {
@@ -91,6 +166,7 @@ public:
             level = newLevel;
             std::cout << name << " leveled up to level " << level << "!\n";
         }
+        checkPromotionEligibility();
     }
 
     void improveSkill(const std::string& skill, int points) {
@@ -101,7 +177,17 @@ public:
 
     void displayStats() const {
         std::cout << "\n=== " << name << " ===\n";
-        std::cout << "Level: " << level << " | Experience: " << experience << "\n";
+        std::cout << "Job Level: " << getJobLevelName(jobLevel);
+        if (eligibleForPromotion) {
+            std::cout << " (PROMOTION READY!)";
+        }
+        std::cout << "\n";
+        std::cout << "Level: " << level << " | Experience: " << experience;
+        if (jobLevel != JobLevel::FELLOW) {
+            int nextPromo = getPromotionRequirement(jobLevel);
+            std::cout << " (Next promotion: " << nextPromo << ")";
+        }
+        std::cout << "\n";
         std::cout << "Activities Left Today: " << activitiesLeft << "/" << MAX_ACTIVITIES_PER_DAY << "\n";
         std::cout << "Days Since Last Activity: " << daysSinceActivity << "\n";
         std::cout << "Skills:\n";
@@ -109,6 +195,20 @@ public:
             std::cout << "  " << std::setw(15) << skill.first << ": " << skill.second << "\n";
         }
     }
+};
+
+class PromotionTask {
+public:
+    std::string name;
+    std::string description;
+    JobLevel requiredLevel;
+    std::map<std::string, int> skillRequirements;
+    int difficulty;
+
+    PromotionTask(const std::string& n, const std::string& desc, JobLevel level, 
+                  const std::map<std::string, int>& skillReqs, int diff)
+        : name(n), description(desc), requiredLevel(level), 
+          skillRequirements(skillReqs), difficulty(diff) {}
 };
 
 class MeetingTask {
@@ -130,6 +230,7 @@ class MeetingGame {
 private:
     std::vector<Character> characters;
     std::vector<MeetingTask> tasks;
+    std::vector<PromotionTask> promotionTasks;
     std::mt19937 rng;
     std::uniform_int_distribution<int> dice;
     int currentDay;
@@ -137,6 +238,7 @@ private:
 public:
     MeetingGame() : rng(std::random_device{}()), dice(1, 20), currentDay(1) {
         initializeTasks();
+        initializePromotionTasks();
     }
 
     void initializeTasks() {
@@ -202,8 +304,13 @@ public:
         std::cout << "\n=== Team Members (Day " << currentDay << ") ===\n";
         for (size_t i = 0; i < characters.size(); ++i) {
             std::cout << i + 1 << ". " << characters[i].getName() 
-                      << " (Level " << characters[i].getLevel() 
-                      << ", Activities: " << characters[i].getActivitiesLeft() << "/3)\n";
+                      << " (" << characters[i].getJobLevelString()
+                      << ", Level " << characters[i].getLevel() 
+                      << ", Activities: " << characters[i].getActivitiesLeft() << "/3";
+            if (characters[i].isEligibleForPromotion()) {
+                std::cout << ", PROMOTION READY!";
+            }
+            std::cout << ")\n";
         }
     }
 
@@ -220,7 +327,85 @@ public:
         }
     }
 
-    std::vector<int> parseCharacterSelection(const std::string& input) {
+    bool attemptPromotionTask(int charIndex) {
+        if (charIndex < 0 || charIndex >= characters.size()) {
+            std::cout << "Invalid character selection!\n";
+            return false;
+        }
+
+        Character& character = characters[charIndex];
+        
+        if (!character.isEligibleForPromotion()) {
+            std::cout << character.getName() << " is not eligible for promotion yet!\n";
+            return false;
+        }
+        
+        if (!character.canDoActivity()) {
+            std::cout << character.getName() << " has no activities left today!\n";
+            return false;
+        }
+
+        // Find the promotion task for this character's current level
+        PromotionTask* promotionTask = nullptr;
+        for (auto& task : promotionTasks) {
+            if (task.requiredLevel == character.getJobLevel()) {
+                promotionTask = &task;
+                break;
+            }
+        }
+
+        if (!promotionTask) {
+            std::cout << character.getName() << " is already at the highest level!\n";
+            return false;
+        }
+
+        std::cout << "\n=== PROMOTION ATTEMPT ===\n";
+        std::cout << "Task: " << promotionTask->name << "\n";
+        std::cout << promotionTask->description << "\n\n";
+
+        character.useActivity();
+
+        // Check skill requirements
+        bool meetsRequirements = true;
+        std::cout << "Skill Requirements Check:\n";
+        for (const auto& req : promotionTask->skillRequirements) {
+            int currentSkill = character.getSkill(req.first);
+            std::cout << "  " << req.first << ": " << currentSkill 
+                      << "/" << req.second;
+            if (currentSkill >= req.second) {
+                std::cout << " ✓\n";
+            } else {
+                std::cout << " ✗\n";
+                meetsRequirements = false;
+            }
+        }
+
+        if (!meetsRequirements) {
+            std::cout << "\nFAILED! Skills not sufficient for promotion.\n";
+            character.gainExperience(25); // Consolation XP
+            return false;
+        }
+
+        // Roll for success
+        int roll = dice(rng);
+        int totalBonus = 0;
+        for (const auto& req : promotionTask->skillRequirements) {
+            totalBonus += character.getSkill(req.first);
+        }
+        
+        int totalScore = roll + totalBonus;
+        std::cout << "\nPromotion Roll: " << roll << " + Skills(" << totalBonus 
+                  << ") = " << totalScore << " vs " << promotionTask->difficulty << "\n";
+
+        if (totalScore >= promotionTask->difficulty) {
+            character.attemptPromotion();
+            return true;
+        } else {
+            std::cout << "FAILED! Not quite ready for promotion. Keep developing skills!\n";
+            character.gainExperience(50); // Good XP for trying
+            return false;
+        }
+    }
         std::vector<int> indices;
         std::string current = "";
         
@@ -413,10 +598,11 @@ public:
             std::cout << "1. Add Team Member\n";
             std::cout << "2. Remove Team Member\n";
             std::cout << "3. Do Activity\n";
-            std::cout << "4. View Team Stats\n";
-            std::cout << "5. View Available Tasks\n";
-            std::cout << "6. Next Day\n";
-            std::cout << "7. Exit\n";
+            std::cout << "4. Attempt Promotion\n";
+            std::cout << "5. View Team Stats\n";
+            std::cout << "6. View Available Tasks\n";
+            std::cout << "7. Next Day\n";
+            std::cout << "8. Exit\n";
             std::cout << "Choice: ";
 
             int choice;
@@ -428,6 +614,41 @@ public:
                     std::cout << "Enter team member name (or 'cancel' to cancel): ";
                     std::string name;
                     std::cin >> name;
+                    addCharacter(name);
+                    std::cout << "Press Enter to continue...";
+                    std::cin.ignore();
+                    std::cin.get();
+                    break;
+                }
+                case 2:
+                    removeCharacter();
+                    break;
+                case 3:
+                    playRound();
+                    break;
+                case 4:
+                    attemptPromotion();
+                    break;
+                case 5:
+                    showStats();
+                    break;
+                case 6:
+                    clearScreen();
+                    displayTasks();
+                    std::cout << "Press Enter to continue...";
+                    std::cin.ignore();
+                    std::cin.get();
+                    break;
+                case 7:
+                    nextDay();
+                    break;
+                case 8:
+                    clearScreen();
+                    std::cout << "Thanks for playing SDEWG RPG!\n";
+                    return;
+                default:
+                    std::cout << "Invalid choice!\n";
+            } >> name;
                     addCharacter(name);
                     std::cout << "Press Enter to continue...";
                     std::cin.ignore();
