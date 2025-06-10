@@ -159,8 +159,43 @@ public:
     }
 
     void addCharacter(const std::string& name) {
+        if (name.empty() || name == "cancel" || name == "exit") {
+            std::cout << "Character creation cancelled.\n";
+            return;
+        }
         characters.emplace_back(name);
         std::cout << name << " joined the meeting group!\n";
+    }
+
+    void removeCharacter() {
+        clearScreen();
+        if (characters.empty()) {
+            std::cout << "No team members to remove!\n";
+            std::cout << "Press Enter to continue...";
+            std::cin.ignore();
+            std::cin.get();
+            return;
+        }
+
+        displayCharacters();
+        std::cout << "\nSelect team member to remove (1-" << characters.size() 
+                  << ", or 0 to cancel): ";
+        int choice;
+        std::cin >> choice;
+
+        if (choice == 0) {
+            std::cout << "Character removal cancelled.\n";
+        } else if (choice >= 1 && choice <= characters.size()) {
+            std::string removedName = characters[choice - 1].getName();
+            characters.erase(characters.begin() + choice - 1);
+            std::cout << removedName << " has left the team.\n";
+        } else {
+            std::cout << "Invalid selection!\n";
+        }
+        
+        std::cout << "Press Enter to continue...";
+        std::cin.ignore();
+        std::cin.get();
     }
 
     void displayCharacters() const {
@@ -376,11 +411,12 @@ public:
             clearScreen();
             std::cout << "\n=== SDEWG RPG - Day " << currentDay << " ===\n";
             std::cout << "1. Add Team Member\n";
-            std::cout << "2. Do Activity\n";
-            std::cout << "3. View Team Stats\n";
-            std::cout << "4. View Available Tasks\n";
-            std::cout << "5. Next Day\n";
-            std::cout << "6. Exit\n";
+            std::cout << "2. Remove Team Member\n";
+            std::cout << "3. Do Activity\n";
+            std::cout << "4. View Team Stats\n";
+            std::cout << "5. View Available Tasks\n";
+            std::cout << "6. Next Day\n";
+            std::cout << "7. Exit\n";
             std::cout << "Choice: ";
 
             int choice;
@@ -389,7 +425,7 @@ public:
             switch (choice) {
                 case 1: {
                     clearScreen();
-                    std::cout << "Enter team member name: ";
+                    std::cout << "Enter team member name (or 'cancel' to cancel): ";
                     std::string name;
                     std::cin >> name;
                     addCharacter(name);
@@ -399,22 +435,25 @@ public:
                     break;
                 }
                 case 2:
-                    playRound();
+                    removeCharacter();
                     break;
                 case 3:
-                    showStats();
+                    playRound();
                     break;
                 case 4:
+                    showStats();
+                    break;
+                case 5:
                     clearScreen();
                     displayTasks();
                     std::cout << "Press Enter to continue...";
                     std::cin.ignore();
                     std::cin.get();
                     break;
-                case 5:
+                case 6:
                     nextDay();
                     break;
-                case 6:
+                case 7:
                     clearScreen();
                     std::cout << "Thanks for playing SDEWG RPG!\n";
                     return;
