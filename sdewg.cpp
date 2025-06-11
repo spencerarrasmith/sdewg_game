@@ -799,7 +799,8 @@ public:
         std::cout << "=== Save Game ===\n";
         std::cout << "Enter save file name (without extension): ";
         std::string filename;
-        std::cin >> filename;
+        std::cin.ignore(); // Clear any leftover newline
+        std::getline(std::cin, filename);
         filename += ".sav";
 
         if (saveGame(filename)) {
@@ -809,7 +810,6 @@ public:
         }
 
         std::cout << "Press Enter to continue...";
-        std::cin.ignore();
         std::cin.get();
     }
 
@@ -818,7 +818,8 @@ public:
         std::cout << "=== Load Game ===\n";
         std::cout << "Enter save file name (without extension): ";
         std::string filename;
-        std::cin >> filename;
+        std::cin.ignore(); // Clear any leftover newline
+        std::getline(std::cin, filename);
         filename += ".sav";
 
         if (loadGame(filename)) {
@@ -828,7 +829,6 @@ public:
         }
 
         std::cout << "Press Enter to continue...";
-        std::cin.ignore();
         std::cin.get();
     }
 
@@ -864,10 +864,10 @@ public:
                     clearScreen();
                     std::cout << "Enter team member name (or 'cancel' to cancel): ";
                     std::string name;
-                    std::cin >> name;
+                    std::cin.ignore(); // Clear any leftover newline
+                    std::getline(std::cin, name);
                     addCharacter(name);
                     std::cout << "Press Enter to continue...";
-                    std::cin.ignore();
                     std::cin.get();
                     break;
                 }
